@@ -1,26 +1,25 @@
 global:
   valuesDirectoryURL: https://github.com/dagger-refuse-cool/edge-gitops/raw/main/
   options:
-    useCSV: True
+    useCSV: False
     syncPolicy: Automatic
     installPlanApproval: Automatic
 
 site:
   name: datacenter
 
-  proposedOptions:
-    manageGitops: True
-    isHubCluster: True
-
   namespaces:
   - open-cluster-management
+  - application-ci
 
   subscriptions:
   - name: advanced-cluster-management
     namespace: open-cluster-management
-    source: redhat-operators
     channel: release-2.3
-    csv: v2.3.2
+    csv: advanced-cluster-management.v2.3.2
+
+  - name: openshift-pipelines-operator-rh
+    csv: redhat-openshift-pipelines.v1.5.1
 
   projects:
   - datacenter
@@ -29,20 +28,31 @@ site:
   - name: acm
     namespace: open-cluster-management
     project: datacenter
-    path: applications/acm
+    path: common/acm
+    ignoreDifferences:
+    - group: internal.open-cluster-management.io
+      kind: ManagedClusterInfo
+      jsonPointers:
+      - /spec/loggingCA
+
+  - name: pipelines
+    namespace: application-ci
+    project: datacenter
+    path: charts/datacenter/pipelines
+
 
 #
 #  To have apps in multiple flavors, use namespaces and use helm overrides as appropriate
 #
 #  - name: pipelines
-#    namespace: production
+#    namespace: testing
 #    project: datacenter
 #    path: applications/pipeline
 #    repoURL: https://github.com/you/applications.git
-#    targetRevision: stable
+#    targetRevision: main
 #    overrides:
-#    - name: myparam
-#      value: myparam 
+#    - name: test
+#      value: true 
 #  
 #  - name: pipelines
 #    namespace: staging
@@ -64,14 +74,18 @@ site:
 #    targetRevision: main
 
   managedSites:
-  - name: factory
-    # repoURL: https://github.com/dagger-refuse-cool/manuela-factory.git
+  - name: edge
+    # Optional - Point to a different repo
+    # repoURL: https://github.com/dagger-refuse-cool/mySite.git
+    # Must contain values-{sitename}.yaml at the top level
     targetRevision: main
-    path: applications/factory
     helmOverrides:
+    # Values must be strings!
     - name: site.isHubCluster
-      value: false
+      value: "false"
     clusterSelector:
+#      matchLabels:
+#        site: factory
       matchExpressions:
       - key: vendor
         operator: In
