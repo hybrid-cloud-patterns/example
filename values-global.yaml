@@ -1,6 +1,9 @@
 global:
-  valuesDirectoryURL: https://github.com/dagger-refuse-cool/edge-gitops/raw/main/
   options:
-    useCSV: True
+    pattern: PROVIDE_PATTERN_NAME
+    useCSV: False
     syncPolicy: Manual
     installPlanApproval: Automatic
+
+main:
+  clusterGroupName: datacenter 

@@ -1,16 +1,19 @@
-global:
-  valuesDirectoryURL: https://github.com/dagger-refuse-cool/edge-gitops/raw/main/
-  options:
-    useCSV: False
-    syncPolicy: Automatic
-    installPlanApproval: Automatic
-
-site:
+clusterGroup:
   name: datacenter
+  isHubCluster: true
 
+  proposedOptions:
+    manageGitops: True
+    isHubCluster: True
+
+#Provide a list of namespaces to be created by the gitops operator.
   namespaces:
   - open-cluster-management
   - application-ci
+
+#Define the operator subscriptions - if a specific channel is required, then include it; else 
+#create stanza without it to pull the default channel. For operators that are coming from community
+#or certified operators you must add a source declaration. See opendatahub example below.
 
   subscriptions:
   - name: advanced-cluster-management
@@ -21,9 +24,17 @@ site:
   - name: openshift-pipelines-operator-rh
     csv: redhat-openshift-pipelines.v1.5.1
 
+  - name: opendatahub-operator
+    csv: opendatahub-operator.v1.1.2
+    source: community-operators
+
+#Define the argocd project
   projects:
   - datacenter
  
+#Define the applications to be manage by argocd - each defined application below is presented as
+#an individual application within the argocd user interface.
+
   applications:
   - name: acm
     namespace: open-cluster-management
