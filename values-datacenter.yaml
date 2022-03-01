@@ -24,8 +24,10 @@ clusterGroup:
   - application-ci
 
 # This section is where you list the operators that your application workload
-# will need. The Validated Pattern Framework will install the operators listed on
-# your behalf.
+# will need. The Validated Pattern Framework will install the operators listed on your behalf.
+#Define the operator subscriptions - if a specific channel is required, then include it; else 
+#create stanza without it to pull the default channel. For operators that are coming from community
+#or certified operators you must add a source declaration. See opendatahub example below.
 # The supported options are:
 # - name: <Name of the operator> 
 #   namespace: <target namespace> if ommited the operator will choose it's target namespace.
@@ -53,9 +55,17 @@ clusterGroup:
   - name: openshift-pipelines-operator-rh
     csv: redhat-openshift-pipelines.v1.5.1
 
+  - name: opendatahub-operator
+    csv: opendatahub-operator.v1.1.2
+    source: community-operators
+
+#Define the argocd project
   projects:
   - datacenter
  
+#Define the applications to be manage by argocd - each defined application below is presented as
+#an individual application within the argocd user interface.
+
   applications:
   - name: acm
     namespace: open-cluster-management
