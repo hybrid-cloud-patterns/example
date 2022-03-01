@@ -1,12 +1,10 @@
-global:
-  options:
-    useCSV: False
-    syncPolicy: Automatic
-    installPlanApproval: Automatic
-
 clusterGroup:
   name: datacenter
   isHubCluster: true
+
+  proposedOptions:
+    manageGitops: True
+    isHubCluster: True
 
 #Provide a list of namespaces to be created by the gitops operator.
   namespaces:
