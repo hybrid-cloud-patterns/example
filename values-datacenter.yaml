@@ -1,17 +1,49 @@
-global:
-  valuesDirectoryURL: https://github.com/dagger-refuse-cool/edge-gitops/raw/main/
-  options:
-    useCSV: False
-    syncPolicy: Automatic
-    installPlanApproval: Automatic
-
-site:
+clusterGroup:
   name: datacenter
+  isHubCluster: true
 
+  proposedOptions:
+    manageGitops: True
+    isHubCluster: True
+
+# This section is where you can add namespaces you want to create
+# The Validated Patterns framework will create these namespaces on your behalf.
+# You will not have to create namespace manifests as part of you application.
+# The namespaces here are meant to be the ones that you would create in a
+# Hub/Datacenter cluster that defines the hub environment.
+#
+# Example:
+#namespaces:
+#  - app-namespace
+#  - open-cluster-management
+#
+# This section is part of the clusterGroup section
+#
   namespaces:
   - open-cluster-management
   - application-ci
 
+# This section is where you list the operators that your application workload
+# will need. The Validated Pattern Framework will install the operators listed on
+# your behalf.
+# The supported options are:
+# - name: <Name of the operator> 
+#   namespace: <target namespace> if ommited the operator will choose it's target namespace.
+#   source: <source for the operator: e.g redhat-operators | community-operators>
+#   channel: < Channel for the operator> If ommited the operator will use the defaultChannel
+#   csv: <cluster service version> This will be used only if useCSV is set to True in values-global.yaml
+#
+# Example
+#  - name: advanced-cluster-management
+#    namespace: open-cluster-management
+#    source: redhat-operators
+#    channel: release-2.3
+#    csv: v2.3.2
+#
+# You can use the oc cli to get the details for each operator such as csv and defaultChannel.
+# $ oc get packagemanisfests - This command will list all the available operators
+# $ oc get packagemanifest <operator> -o yaml - will print the details in yaml format
+#
   subscriptions:
   - name: advanced-cluster-management
     namespace: open-cluster-management
