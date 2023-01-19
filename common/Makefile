@@ -1,62 +1,117 @@
-BOOTSTRAP=1
-SECRETS=~/values-secret.yaml
-NAME=$(shell basename `pwd`)
+NAME=$(shell basename "`pwd`")
+ifneq ($(origin TARGET_SITE), undefined)
+  TARGET_SITE_OPT=--set main.clusterGroupName=$(TARGET_SITE)
+endif
+
+TARGET_ORIGIN ?= origin
 # This is to ensure that whether we start with a git@ or https:// URL, we end up with an https:// URL
 # This is because we expect to use tokens for repo authentication as opposed to SSH keys
-TARGET_REPO=$(shell git remote show origin | grep Push | sed -e 's/.*URL:[[:space:]]*//' -e 's%^git@%%' -e 's%^https://%%' -e 's%:%/%' -e 's%^%https://%')
+TARGET_REPO=$(shell git ls-remote --get-url --symref $(TARGET_ORIGIN) | sed -e 's/.*URL:[[:space:]]*//' -e 's%^git@%%' -e 's%^https://%%' -e 's%:%/%' -e 's%^%https://%')
 # git branch --show-current is also available as of git 2.22, but we will use this for compatibility
 TARGET_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
-HUBCLUSTER_APPS_DOMAIN=$(shell oc get ingresses.config/cluster -o jsonpath={.spec.domain})
 
 # --set values always take precedence over the contents of -f
-HELM_OPTS=-f values-global.yaml -f $(SECRETS) --set main.git.repoURL="$(TARGET_REPO)" --set main.git.revision=$(TARGET_BRANCH) --set main.options.bootstrap=$(BOOTSTRAP) --set global.hubClusterDomain=$(HUBCLUSTER_APPS_DOMAIN)
-TEST_OPTS= -f common/examples/values-secret.yaml -f values-global.yaml --set global.repoURL="https://github.com/pattern-clone/mypattern" --set main.git.repoURL="https://github.com/pattern-clone/mypattern" --set main.git.revision=main --set main.options.bootstrap=$(BOOTSTRAP) --set global.valuesDirectoryURL="https://github.com/pattern-clone/mypattern/raw/main" --set global.pattern="mypattern" --set global.namespace="pattern-namespace" --set global.hubClusterDomain=hub.example.com --set global.localClusterDomain=region.example.com
-PATTERN_OPTS=-f common/examples/values-example.yaml
-
-#  Makefiles that use this target must provide:
-#  	PATTERN: The name of the pattern that is using it.  This will be used programmatically for the source namespace
-#  	TARGET_NAMESPACE: target namespace to install the secret into
-#  	COMPONENT: The component of the target namespace.  In industrial edge, factory or datacenter - and for the secret
-#  		it needs to be datacenter because that's where the CI components run.
-#  	SECRET_NAME: The name of the secret to manage
-argosecret:
-	PATTERN="$(PATTERN)" TARGET_NAMESPACE="$(TARGET_NAMESPACE)" COMPONENT="$(COMPONENT)" SECRET_NAME="$(SECRET_NAME)" common/scripts/secret.sh
+HELM_OPTS=-f values-global.yaml --set main.git.repoURL="$(TARGET_REPO)" --set main.git.revision=$(TARGET_BRANCH) $(TARGET_SITE_OPT)
+.PHONY: help
+help: ## This help message
+	@printf "$$(grep -hE '^\S+:.*##' $(MAKEFILE_LIST) | sed -e 's/:.*##\s*/:/' -e 's/^\(.\+\):\(.*\)/\\x1b[36m\1\\x1b[m:\2/' | column -c2 -t -s :)\n"
 
 #  Makefiles in the individual patterns should call these targets explicitly
 #  e.g. from industrial-edge: make -f common/Makefile show
-show:
-	helm template common/install/ --name-template $(NAME) $(HELM_OPTS)
+.PHONY: show
+show: ## show the starting template without installing it
+	helm template common/operator-install/ --name-template $(NAME) $(HELM_OPTS)
 
-CHARTS=install clustergroup acm golang-external-secrets
+# We only check the remote ssh git branch's existance if we're not running inside a container
+# as getting ssh auth working inside a container seems a bit brittle
+.PHONY: validate-origin
+validate-origin: ## verify the git origin is available
+	@echo Checking repo $(TARGET_REPO) - branch $(TARGET_BRANCH)
+	@if [ ! -f /run/.containerenv ]; then\
+		git ls-remote --exit-code --heads $(TARGET_REPO) $(TARGET_BRANCH) >/dev/null &&\
+				echo "$(TARGET_REPO) - $(TARGET_BRANCH) exists" ||\
+				(echo "$(TARGET_BRANCH) not found in $(TARGET_REPO)"; exit 1);\
+	else\
+		echo "Running inside a container: Skipping git ssh checks";\
+	fi
 
-test:
-# Test that all values used by the chart are in values.yaml with the same defaults as the pattern
-	@for t in $(CHARTS); do common/scripts/test.sh $$t naked ""; if [ $$? != 0 ]; then exit 1; fi; done
-# Test the charts as the pattern would drive them
-	@for t in $(CHARTS); do common/scripts/test.sh $$t normal "$(TEST_OPTS) $(PATTERN_OPTS)"; if [ $$? != 0 ]; then exit 1; fi; done
+.PHONY: validate-schema
+validate-schema: ## validates values files against schema in common/clustergroup
+	$(eval VAL_PARAMS := $(shell for i in ./values-*.yaml; do echo -n "$${i} "; done))
+	@echo -n "Validating clustergroup schema of: "
+	@set -e; for i in $(VAL_PARAMS); do echo -n " $$i"; helm template common/clustergroup $(HELM_OPTS) -f "$${i}" >/dev/null; done
+	@echo
 
-helmlint:
-	@for t in $(CHARTS); do helm lint $(TEST_OPTS) $(PATTERN_OPTS) $$t; if [ $$? != 0 ]; then exit 1; fi; done
+.PHONY: operator-deploy operator-upgrade
+operator-deploy operator-upgrade: validate-origin validate-schema ## runs helm install
+	helm upgrade --install $(NAME) common/operator-install/ $(HELM_OPTS)
 
-validate-origin:
-	git ls-remote $(TARGET_REPO)
+.PHONY: deploy upgrade legacy-deploy legacy-upgrade
+deploy upgrade legacy-deploy legacy-upgrade: ## does nothing anymore. use operator-deploy
+	@echo "UNSUPPORTED TARGET: please switch to 'operator-deploy'"; exit 1
 
-init:
-	git submodule update --init --recursive
-
-deploy: validate-origin
-	helm install $(NAME) common/install/ $(HELM_OPTS)
-
-upgrade: validate-origin
-	helm upgrade $(NAME) common/install/ $(HELM_OPTS)
-
-uninstall:
+.PHONY: uninstall
+uninstall: ## runs helm uninstall
+	$(eval CSV := $(shell oc get subscriptions -n openshift-operators openshift-gitops-operator -ojsonpath={.status.currentCSV}))
 	helm uninstall $(NAME)
+	@oc delete csv -n openshift-operators $(CSV)
 
-vault-init:
-	common/scripts/vault-utils.sh vault_init common/pattern-vault.init
+.PHONY: load-secrets
+load-secrets: ## loads the secrets into the vault
+	common/scripts/vault-utils.sh push_secrets $(NAME)
 
-vault-unseal:
-	common/scripts/vault-utils.sh vault_unseal common/pattern-vault.init
+CHARTS=$(shell find . -type f -iname 'Chart.yaml' -exec dirname "{}"  \; | grep -v examples | sed -e 's/.\///')
+# Section related to tests and linting
+TEST_OPTS= -f values-global.yaml --set global.repoURL="https://github.com/pattern-clone/mypattern" \
+	--set main.git.repoURL="https://github.com/pattern-clone/mypattern" --set main.git.revision=main --set global.pattern="mypattern" \
+	--set global.namespace="pattern-namespace" --set global.hubClusterDomain=apps.hub.example.com --set global.localClusterDomain=apps.region.example.com --set global.clusterDomain=region.example.com\
+	--set "clusterGroup.imperative.jobs[0].name"="test" --set "clusterGroup.imperative.jobs[0].playbook"="ansible/test.yml"
+PATTERN_OPTS=-f common/examples/values-example.yaml
+EXECUTABLES=git helm oc ansible
 
-.phony: install test
+.PHONY: test
+test: ## run helm tests
+	@for t in $(CHARTS); do common/scripts/test.sh $$t all "$(TEST_OPTS)"; if [ $$? != 0 ]; then exit 1; fi; done
+
+.PHONY: helmlint
+helmlint: ## run helm lint
+	@for t in $(CHARTS); do common/scripts/lint.sh $$t $(TEST_OPTS); if [ $$? != 0 ]; then exit 1; fi; done
+
+API_URL ?= https://raw.githubusercontent.com/hybrid-cloud-patterns/ocp-schemas/main/openshift/4.10/
+KUBECONFORM_SKIP ?= -skip 'CustomResourceDefinition'
+# We need to skip 'CustomResourceDefinition' as openapi2jsonschema seems to be unable to generate them ATM
+.PHONY: kubeconform
+kubeconform: ## run helm kubeconform
+	@for t in $(CHARTS); do helm template $(TEST_OPTS) $(PATTERN_OPTS) $$t | kubeconform -strict $(KUBECONFORM_SKIP) -verbose -schema-location $(API_URL); if [ $$? != 0 ]; then exit 1; fi; done
+
+.PHONY: validate-prereq
+validate-prereq: ## verify pre-requisites
+	@for t in $(EXECUTABLES); do if ! which $$t > /dev/null 2>&1; then echo "No $$t in PATH"; exit 1; fi; done
+	@echo "Prerequisites checked '$(EXECUTABLES)': OK"
+	@ansible -m ansible.builtin.command -a "{{ ansible_python_interpreter }} -c 'import kubernetes'" localhost > /dev/null 2>&1
+	@echo "Python kubernetes module: OK"
+	@echo -n "Check for kubernetes.core collection: "
+	@if ! ansible-galaxy collection list | grep kubernetes.core > /dev/null 2>&1; then echo "Not found"; exit 1; fi
+	@echo "OK"
+
+.PHONY: super-linter
+super-linter: ## Runs super linter locally
+	rm -rf .mypy_cache
+	podman run -e RUN_LOCAL=true -e USE_FIND_ALGORITHM=true	\
+					-e VALIDATE_BASH=false \
+					-e VALIDATE_JSCPD=false \
+					-e VALIDATE_KUBERNETES_KUBEVAL=false \
+					-e VALIDATE_YAML=false \
+					-e VALIDATE_ANSIBLE=false \
+					-e VALIDATE_DOCKERFILE_HADOLINT=false \
+					-e VALIDATE_TEKTON=false \
+					$(DISABLE_LINTERS) \
+					-v $(PWD):/tmp/lint:rw,z docker.io/github/super-linter:slim-v4
+
+.PHONY: ansible-lint
+ansible-lint: ## run ansible lint on ansible/ folder
+	podman run -it -v $(PWD):/workspace:rw,z --workdir /workspace --entrypoint "/usr/local/bin/ansible-lint" quay.io/ansible/creator-ee:latest  "-vvv" "ansible/"
+
+.PHONY: ansible-unittest
+ansible-unittest: ## run ansible unit tests
+	pytest -r a --fulltrace --color yes ansible/tests/unit/test_*.py

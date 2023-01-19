@@ -34,7 +34,7 @@ jobs:
           # Full git history is needed to get a proper list of changed files within `super-linter`
           fetch-depth: 0
       - name: Setup helm
-        uses: azure/setup-helm@v1
+        uses: azure/setup-helm@v3
         # with:
         #   version: '<version>' # default is latest stable
         id: install
@@ -51,6 +51,14 @@ jobs:
       - name: Run make test
         run: |
           make test
+
       - name: Run make helmlint
         run: |
           make helmlint
+
+      - name: Run make helm kubeconform
+        run: |
+          curl -L -O https://github.com/yannh/kubeconform/releases/download/v0.4.13/kubeconform-linux-amd64.tar.gz
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv -v kubeconform /usr/local/bin
+          make kubeconform
