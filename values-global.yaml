@@ -1,5 +1,5 @@
 main:
-  clusterGroupName: hub
+  clusterGroupName: example
 
 global:
   pattern: example
