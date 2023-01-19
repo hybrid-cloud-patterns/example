@@ -1,5 +1,5 @@
 clusterGroup:
-  name: datacenter
+  name: example
   isHubCluster: true
 
 # This section is where you can add namespaces you want to create
