@@ -17,16 +17,19 @@ clusterGroup:
 #
   namespaces:
   - open-cluster-management
-  - application-ci
 
 # This section is where you list the operators that your application workload
 # will need. The Validated Pattern Framework will install the operators listed on your behalf.
-#Define the operator subscriptions - if a specific channel is required, then include it; else 
-#create stanza without it to pull the default channel. For operators that are coming from community
-#or certified operators you must add a source declaration. See opendatahub example below.
+# Define the operator subscriptions - if a specific channel is required, then include it; else 
+# create stanza without it to pull the default channel. For operators that are coming from community
+# or certified operators you must add a source declaration. See opendatahub example below.
+# 
 # The supported options are:
 # - name: <Name of the operator> 
 #   namespace: <target namespace> if ommited the operator will choose it's target namespace.
+#   disabled: <boolean> If true it tells the framework not to create the subscription manifest.
+#   installApprovalPlan: <Manual or Automatic> Approval is the user approval policy for an InstallPlan. It must be one of "Automatic" or "Manual".
+#                                              If omitted it defaults to Automatic.
 #   source: <source for the operator: e.g redhat-operators | community-operators>
 #   channel: < Channel for the operator> If ommited the operator will use the defaultChannel
 #   csv: <cluster service version> This will be used only if useCSV is set to True in values-global.yaml
@@ -34,6 +37,7 @@ clusterGroup:
 # Example
 #  - name: advanced-cluster-management
 #    namespace: open-cluster-management
+#    disabled: false
 #    source: redhat-operators
 #    channel: release-2.3
 #    csv: v2.3.2
@@ -43,41 +47,28 @@ clusterGroup:
 # $ oc get packagemanifest <operator> -o yaml - will print the details in yaml format
 #
   subscriptions:
-  - name: advanced-cluster-management
-    namespace: open-cluster-management
-    channel: release-2.3
-    csv: advanced-cluster-management.v2.3.2
+    acm:
+      name: advanced-cluster-management
+      namespace: open-cluster-management
 
-  - name: openshift-pipelines-operator-rh
-    csv: redhat-openshift-pipelines.v1.5.1
-
-  - name: opendatahub-operator
-    csv: opendatahub-operator.v1.1.2
-    source: community-operators
-
-#Define the argocd project
+#Define the argocd projects
   projects:
-  - datacenter
+  - hub
  
 #Define the applications to be manage by argocd - each defined application below is presented as
 #an individual application within the argocd user interface.
 
   applications:
-  - name: acm
-    namespace: open-cluster-management
-    project: datacenter
-    path: common/acm
-    ignoreDifferences:
-    - group: internal.open-cluster-management.io
-      kind: ManagedClusterInfo
-      jsonPointers:
-      - /spec/loggingCA
-
-  - name: pipelines
-    namespace: application-ci
-    project: datacenter
-    path: charts/datacenter/pipelines
-
+    acm:
+      name: acm
+      namespace: open-cluster-management
+      project: datacenter
+      path: common/acm
+      ignoreDifferences:
+      - group: internal.open-cluster-management.io
+        kind: ManagedClusterInfo
+        jsonPointers:
+        - /spec/loggingCA
 
 #
 #  To have apps in multiple flavors, use namespaces and use helm overrides as appropriate
@@ -112,21 +103,21 @@ clusterGroup:
 #    targetRevision: main
 
   managedClusterGroups:
-  - name: edge
-    # Optional - Point to a different repo
-    # repoURL: https://github.com/dagger-refuse-cool/mySite.git
-    # Must contain values-{sitename}.yaml at the top level
-    targetRevision: main
-    helmOverrides:
-    # Values must be strings!
-    - name: site.isHubCluster
-      value: "false"
-    clusterSelector:
-#      matchLabels:
-#        site: factory
-      matchExpressions:
-      - key: vendor
-        operator: In
-        values:
-          - OpenShift
-
+    edge-clusters: 
+      name: edge
+      # Optional - Point to a different repo
+      # repoURL: https://github.com/dagger-refuse-cool/mySite.git
+      # Must contain values-{sitename}.yaml at the top level
+      targetRevision: main
+      helmOverrides:
+      # Values must be strings!
+      - name: site.isHubCluster
+        value: "false"
+      clusterSelector:
+#        matchLabels:
+#          site: factory
+        matchExpressions:
+        - key: vendor
+          operator: In
+          values:
+            - OpenShift
