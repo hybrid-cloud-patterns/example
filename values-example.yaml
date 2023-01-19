@@ -2,10 +2,6 @@ clusterGroup:
   name: datacenter
   isHubCluster: true
 
-  proposedOptions:
-    manageGitops: True
-    isHubCluster: True
-
 # This section is where you can add namespaces you want to create
 # The Validated Patterns framework will create these namespaces on your behalf.
 # You will not have to create namespace manifests as part of you application.
@@ -115,7 +111,7 @@ clusterGroup:
 #    repoURL: https://github.com/vendor/applications.git
 #    targetRevision: main
 
-  managedSites:
+  managedClusterGroups:
   - name: edge
     # Optional - Point to a different repo
     # repoURL: https://github.com/dagger-refuse-cool/mySite.git
