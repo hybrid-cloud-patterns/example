@@ -3,39 +3,24 @@
 ### Example Makefile
 The below Makefile is an example that can be used to trigger your deployments:
 ```sh
-BOOTSTRAP=1
-ARGO_TARGET_NAMESPACE=demo-namespace
-PATTERN=vessel-id
-COMPONENT=datacenter
-SECRET_NAME="argocd-env"
-TARGET_REPO=$(shell git remote show origin | grep Push | sed -e 's/.*URL://' -e 's%:[a-z].*@%@%' -e 's%:%/%' -e 's%git@%https://%' )
-CHART_OPTS=-f common/examples/values-secret.yaml -f values-global.yaml -f values-datacenter.yaml --set global.targetRevision=main --set global.valuesDirectoryURL="https://github.com/pattern-clone/pattern/raw/main/" --set global.pattern="dema-pattern" --set global.namespace="pattern-namespace"
-NAME=$(shell basename `pwd`)
-
 .PHONY: default
-default: show
+default: help
+
+.PHONY: help
+# No need to add a comment here as help is described in common/
+help:
+	@printf "$$(grep -hE '^\S+:.*##' $(MAKEFILE_LIST) common/Makefile | sort | sed -e 's/:.*##\s*/:/' -e 's/^\(.\+\):\(.*\)/\\x1b[36m\1\\x1b[m:\2/' | column -c2 -t -s :)\n"
 
 %:
-	echo "Delegating $* target"
 	make -f common/Makefile $*
 
-install: deploy
-ifeq ($(BOOTSTRAP),1)
-	echo "Bootstrapping Demo Pattern"
-endif
+install: operator-deploy #post-install ## installs the pattern, inits the vault and loads the secrets
+	@echo "Installed"
 
-predeploy:
-	./scripts/precheck.sh
-
-update: upgrade
-ifeq ($(BOOTSTRAP),1)
-	echo "Bootstrapping Demo Pattern"
-	make bootstrap
-endif
-
-bootstrap:
+post-install: ## Post-install tasks
+	make load-secrets
+	@echo "Done"
 
 test:
-	make -f common/Makefile CHARTS="$(wildcard charts/datacenter/*)" PATTERN_OPTS="-f values-datacenter.yaml" test
-	make -f common/Makefile CHARTS="$(wildcard charts/factory/*)" PATTERN_OPTS="-f values-factory.yaml" test
+	@make -f common/Makefile PATTERN_OPTS="-f values-global.yaml -f values-example.yaml" test
 ```
