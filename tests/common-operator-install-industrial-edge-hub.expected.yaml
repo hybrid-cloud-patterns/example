@@ -6,7 +6,7 @@ metadata:
   name: common-operator-install
   namespace: openshift-operators
 spec:
-  clusterGroupName: hub
+  clusterGroupName: example
   gitSpec:
     targetRepo: https://github.com/pattern-clone/mypattern
     targetRevision: main
