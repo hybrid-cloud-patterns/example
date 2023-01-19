@@ -18,11 +18,17 @@ clusterGroup:
   - app-namespace
 
 # This section is where you list the operators that your application workload
-# will need. The Validated Pattern Framework will install the operators listed on
-# your behalf.
+# will need. The Validated Pattern Framework will install the operators listed on your behalf.
+# Define the operator subscriptions - if a specific channel is required, then include it; else 
+# create stanza without it to pull the default channel. For operators that are coming from community
+# or certified operators you must add a source declaration. See opendatahub example below.
+# 
 # The supported options are:
 # - name: <Name of the operator> 
 #   namespace: <target namespace> if ommited the operator will choose it's target namespace.
+#   disabled: <boolean> If true it tells the framework not to create the subscription manifest.
+#   installApprovalPlan: <Manual or Automatic> Approval is the user approval policy for an InstallPlan. It must be one of "Automatic" or "Manual".
+#                                              If omitted it defaults to Automatic.
 #   source: <source for the operator: e.g redhat-operators | community-operators>
 #   channel: < Channel for the operator> If ommited the operator will use the defaultChannel
 #   csv: <cluster service version> This will be used only if useCSV is set to True in values-global.yaml
@@ -30,6 +36,7 @@ clusterGroup:
 # Example
 #  - name: advanced-cluster-management
 #    namespace: open-cluster-management
+#    disabled: false
 #    source: redhat-operators
 #    channel: release-2.3
 #    csv: v2.3.2
@@ -39,9 +46,9 @@ clusterGroup:
 # $ oc get packagemanifest <operator> -o yaml - will print the details in yaml format
 #
   subscriptions:
-  - name: opendatahub-operator
-    source: community-operators
-    csv: opendatahub-operator.v1.1.0
+    odh:
+      name: opendatahub-operator
+      source: community-operators
 
 
 #

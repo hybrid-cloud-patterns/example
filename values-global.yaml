@@ -1,8 +1,8 @@
 main:
-  clusterGroupName: datacenter
+  clusterGroupName: hub
 
 global:
-  pattern: <validated-pattern-name>
+  pattern: example
 
   options:
     useCSV: False
