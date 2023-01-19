@@ -147,7 +147,7 @@ data:
       repoURL: https://github.com/pattern-clone/mypattern
       targetRevision: main
     main:
-      clusterGroupName: hub
+      clusterGroupName: example
       git:
         repoURL: https://github.com/pattern-clone/mypattern
         revision: main
