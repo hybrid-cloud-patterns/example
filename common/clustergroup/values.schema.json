@@ -101,37 +101,37 @@
       "properties": {
         "pattern": {
           "type": "string",
-          "readOnly": "true",
+          "readOnly": true,
           "description": "The name of the pattern being installed. The default is the name of the repository's folder and is automatically set by the Makefile"
         },
         "clusterDomain": {
           "type": "string",
-          "readOnly": "true",
+          "readOnly": true,
           "description": "The FQDN domain of the cluster without the 'apps.' component. For example: mcg-hub.blueprints.rhecoeng.com. Gets set automatically by the framework"
         },
         "localClusterDomain": {
           "type": "string",
-          "readOnly": "true",
+          "readOnly": true,
           "description": "The FQDN domain of the cluster including the 'apps.' component. For example: apps.mcg-hub.blueprints.rhecoeng.com. Gets set automatically by the framework"
         },
         "targetRevision": {
           "type": "string",
-          "readOnly": "true",
+          "readOnly": true,
           "description": "revision (branch/commit/ref) to use on the pattern's git repository, it is set automatically by the pattern's operator"
         },
         "repoURL": {
           "type": "string",
-          "readOnly": "true",
+          "readOnly": true,
           "description": "URL of the pattern's git repository, it is set automatically by the pattern's operator"
         },
         "hubClusterDomain": {
           "type": "string",
-          "readOnly": "true",
+          "readOnly": true,
           "description": "The FQDN domain of the hub cluster including the 'apps.' component. For example: apps.mcg-hub.blueprints.rhecoeng.com. Gets set automatically by the framework. Only makes sense when using ACM"
         },
         "namespace": {
           "type": "string",
-          "readOnly": "true",
+          "readOnly": true,
           "description": "The namespace in which the ArgoCD instance is running. Automatically set to either 'openshift-operators' or '$ARGOCD_APP_NAMESPACE'"
         },
         "git": {
@@ -142,14 +142,13 @@
         }
       },
       "required": [
-        "options",
-        "pattern"
+        "options"
       ],
       "title": "Global"
     },
     "GlobalGit": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "description": "The git configuration used to support Tekton pipeline tasks.",
       "properties": {
         "hostname": {
@@ -221,7 +220,21 @@
           "type": "array",
           "description": "This is the array of namespaces that the VP framework will create.  In addition, operator groups will also be created for each namespace.",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/Namespaces"
+          }
+        },
+        "indexImages": {
+          "anyOf": [
+            {
+              "type": "array"
+            },
+            {
+              "type": "object"
+            }
+          ],
+          "description": "List of index images for overriding default catalog sources.",
+          "items": {
+            "$ref": "#/definitions/IndexImages"
           }
         },
         "operatorgroupExcludes": {
@@ -239,6 +252,9 @@
         },
         "subscriptions": {
           "anyOf": [
+            {
+              "type": "null"
+            },
             {
               "type": "array"
             },
@@ -296,13 +312,57 @@
       "required": [
         "applications",
         "isHubCluster",
-        "managedClusterGroups",
         "name",
         "namespaces",
         "projects"
       ],
       "title": "ClusterGroup"
     },
+    "Namespaces": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "string"
+        }
+      ],
+	  "description": "Description of the applications that will be created in the ArgoCD instances. The Application CRD is the Kubernetes resource object representing a deployed application instance in an environment. Two ways of defining applications: Using a list or using a dictionary.",
+	  "additionalProperties": true,
+	  "properties": {
+         "name": {
+		    "type": "string",
+		    "description": "Name of the namespace."
+          },
+	      "labels": {
+		    "type": "array",
+		    "items": {
+		      "$ref": "#/definitions/NameValue"
+		    }
+	      },
+	      "annotations": {
+		    "type": "array",
+		    "items": {
+		      "$ref": "#/definitions/NameValue"
+		    }
+	      }
+	  }
+    },
+	"NameValue": {
+      "type": "object",
+      "description": "Description of the applications that will be created in the ArgoCD instances. The Application CRD is the Kubernetes resource object representing a deployed application instance in an environment. Two ways of defining applications: Using a list or using a dictionary.",
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the namespace."
+        },
+        "value": {
+          "type": "string",
+          "description": "Name of the namespace."
+        }
+	  }
+	},
     "Applications": {
       "type": "object",
       "description": "Description of the applications that will be created in the ArgoCD instances. The Application CRD is the Kubernetes resource object representing a deployed application instance in an environment. Two ways of defining applications: Using a list or using a dictionary.",
@@ -394,6 +454,21 @@
         "project"
       ],
       "title": "Applications"
+    },
+    "IndexImages": {
+      "type": "object",
+      "description": "Details for overriding default catalog sources",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name for the custom catalog source."
+        },
+        "image": {
+          "type": "string",
+          "description": "Location of the index image."
+        }
+      }
     },
     "HostedSite": {
       "type": "object",
@@ -627,7 +702,14 @@
           "type": "string"
         },
         "value": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
         }
       },
       "required": [
