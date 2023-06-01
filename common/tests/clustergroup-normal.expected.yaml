@@ -3,9 +3,14 @@
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: open-cluster-management
   labels:
     argocd.argoproj.io/managed-by: mypattern-example
-  name: open-cluster-management
+    kubernetes.io/os: "linux"
+    openshift.io/node-selector: ""
+  annotations:
+    openshift.io/cluster-monitoring: "true"
+    owner: "namespace owner"
 spec:
 ---
 # Source: pattern-clustergroup/templates/core/namespaces.yaml
@@ -15,6 +20,15 @@ metadata:
   labels:
     argocd.argoproj.io/managed-by: mypattern-example
   name: application-ci
+spec:
+---
+# Source: pattern-clustergroup/templates/core/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    argocd.argoproj.io/managed-by: mypattern-example
+  name: excludes-ci
 spec:
 ---
 # Source: pattern-clustergroup/templates/imperative/namespace.yaml
@@ -76,7 +90,7 @@ data:
         clusterRoleName: imperative-cluster-role
         clusterRoleYaml: ""
         cronJobName: imperative-cronjob
-        image: registry.redhat.io/ansible-automation-platform-22/ee-supported-rhel8:latest
+        image: registry.redhat.io/ansible-automation-platform-23/ee-supported-rhel8:latest
         imagePullPolicy: Always
         insecureUnsealVaultInsideClusterSchedule: '*/5 * * * *'
         jobName: imperative-job
@@ -143,8 +157,17 @@ data:
         name: argo-edge
       name: example
       namespaces:
-      - open-cluster-management
+      - open-cluster-management:
+          annotations:
+            openshift.io/cluster-monitoring: "true"
+            owner: namespace owner
+          labels:
+            kubernetes.io/os: linux
+            openshift.io/node-selector: ""
       - application-ci
+      - excludes-ci
+      operatorgroupExcludes:
+      - excludes-ci
       projects:
       - datacenter
       subscriptions:
@@ -314,7 +337,7 @@ spec:
             # git init happens in /git/repo so that we can set the folder to 0770 permissions
             # reason for that is ansible refuses to create temporary folders in there            
             - name: git-init
-              image: registry.redhat.io/ansible-automation-platform-22/ee-supported-rhel8:latest
+              image: registry.redhat.io/ansible-automation-platform-23/ee-supported-rhel8:latest
               imagePullPolicy: Always
               env:
                 - name: HOME
@@ -327,7 +350,7 @@ spec:
               - name: git
                 mountPath: "/git"
             - name: test
-              image: registry.redhat.io/ansible-automation-platform-22/ee-supported-rhel8:latest
+              image: registry.redhat.io/ansible-automation-platform-23/ee-supported-rhel8:latest
               imagePullPolicy: Always
               env:
                 - name: HOME
@@ -350,7 +373,7 @@ spec:
                   subPath: values.yaml
           containers:            
             - name: "done"
-              image: registry.redhat.io/ansible-automation-platform-22/ee-supported-rhel8:latest
+              image: registry.redhat.io/ansible-automation-platform-23/ee-supported-rhel8:latest
               imagePullPolicy: Always
               command:
                 - 'sh'
@@ -388,7 +411,7 @@ spec:
             # git init happens in /git/repo so that we can set the folder to 0770 permissions
             # reason for that is ansible refuses to create temporary folders in there            
             - name: git-init
-              image: registry.redhat.io/ansible-automation-platform-22/ee-supported-rhel8:latest
+              image: registry.redhat.io/ansible-automation-platform-23/ee-supported-rhel8:latest
               imagePullPolicy: Always
               env:
                 - name: HOME
@@ -401,7 +424,7 @@ spec:
               - name: git
                 mountPath: "/git"
             - name: unseal-playbook
-              image: registry.redhat.io/ansible-automation-platform-22/ee-supported-rhel8:latest
+              image: registry.redhat.io/ansible-automation-platform-23/ee-supported-rhel8:latest
               imagePullPolicy: Always
               env:
                 - name: HOME
@@ -416,7 +439,7 @@ spec:
                 - -e
                 - "@/values/values.yaml"
                 - -t
-                - 'vault_init,vault_unseal,vault_secrets_init'
+                - 'vault_init,vault_unseal,vault_secrets_init,vault_spokes_init'
                 - "common/ansible/playbooks/vault/vault.yaml"
               volumeMounts:                
                 - name: git
@@ -426,7 +449,7 @@ spec:
                   subPath: values.yaml
           containers:            
             - name: "done"
-              image: registry.redhat.io/ansible-automation-platform-22/ee-supported-rhel8:latest
+              image: registry.redhat.io/ansible-automation-platform-23/ee-supported-rhel8:latest
               imagePullPolicy: Always
               command:
                 - 'sh'
@@ -841,6 +864,28 @@ metadata:
   annotations:
     argocd.argoproj.io/compare-options: IgnoreExtraneous
 spec:
+# Adding health checks to argocd to prevent pvc resources
+# that aren't bound state from blocking deployments
+  resourceCustomizations: |
+    PersistentVolumeClaim:
+      health.lua: |
+        hs = {}
+        if obj.status ~= nil then
+          if obj.status.phase ~= nil then
+            if obj.status.phase == "Pending" then
+              hs.status = "Healthy"
+              hs.message = obj.status.phase
+              return hs
+            elseif obj.status.phase == "Bound" then
+              hs.status = "Healthy"
+              hs.message = obj.status.phase
+              return hs
+            end
+          end
+        end
+        hs.status = "Progressing"
+        hs.message = "Waiting for PVC"
+        return hs
   applicationInstanceLabelKey: argocd.argoproj.io/instance
   # Not the greatest way to pass git/quay info to sub-applications, but it will do until
   # we can support helmChart with kustomize
@@ -889,15 +934,17 @@ spec:
       requests:
         cpu: 500m
         memory: 2Gi
-  dex:
-    openShiftOAuth: true
-    resources:
-      limits:
-        cpu: 500m
-        memory: 256Mi
-      requests:
-        cpu: 250m
-        memory: 128Mi
+  sso:
+    provider: dex
+    dex:
+      openShiftOAuth: true
+      resources:
+        limits:
+          cpu: 500m
+          memory: 256Mi
+        requests:
+          cpu: 250m
+          memory: 128Mi
   initialSSHKnownHosts: {}
   rbac:
     defaultPolicy: role:admin

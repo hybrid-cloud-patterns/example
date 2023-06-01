@@ -1,3 +1,7 @@
+main:
+  gitops:
+    channel: "gitops-1.8"
+
 global:
   pattern: none
   repoURL: none
@@ -5,6 +9,9 @@ global:
 
 
 clusterGroup:
+  subscriptions:
+    acm:
+      source: redhat-operators
   managedClusterGroups:
 #    testRegion:
 #      name: region-one

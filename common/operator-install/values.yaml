@@ -4,6 +4,7 @@ main:
     revision: main
 
   gitops:
-    channel: "stable"
+    channel: "gitops-1.8"
+    operatorSource: redhat-operators
 
   clusterGroupName: default
